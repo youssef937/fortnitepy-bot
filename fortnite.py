@@ -254,7 +254,8 @@ async def event_friend_message(message):
         await message.reply('Emoji set to ' + id)
         print(f"[FORTNITEPY] [{time}] Client's Emoji set to " + id)
     if "!searchvariants" in args[0].lower():
-        aaa = args[2:]
+        aab = args[2:]
+        aaa = ''.join(aab)
         if args[1].lower() == "skin":
             iid = await BenBotAsync.getSkinId(aaa)
         elif args[1].lower() == "backbling":
