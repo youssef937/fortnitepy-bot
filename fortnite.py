@@ -38,7 +38,7 @@ with livejson.File("settings.json",pretty=True,sort_keys=True,indent=4) as f:
     for value in data.values():
         if value == "":
             value = 'null'
-GITHUB_BASE = "https://raw.githubusercontent.com/xMistt/fortnitepy-bot/master/"
+GITHUB_BASE = "https://raw.githubusercontent.com/xMistt/fortnitepy-bot/dev/"
 time = datetime.datetime.now().strftime('%H:%M:%S')
 print('\033[1m' + f'[FORTNITEPY] [{time}] fortnitepy-bot made by xMistt and Alexa. credit to Terbau for creating the library.')
 class Constants:
@@ -110,6 +110,8 @@ async def event_ready():
         version = json.load(v)
     if response["version"] != version["version"]:
         print("Different version!!")
+    elif response["version"] == version["version"]:
+        print(Fore.GREEN + f"The bot is up to date! Version:{version["version"]}")
 
 
     
