@@ -104,7 +104,7 @@ async def event_ready():
                 output += Fore.GREEN + f"{friend.display_name} "
     print(str(output))
     s = await aiohttp.ClientSession()
-    resp = await s.get("https://raw.githubusercontent.com/xMistt/fortnitepy-bot/dev/" + )
+    resp = await s.get(GITHUB_BASE + "__version__")
     response = await resp.json
     with open("__version__.ver", "r") as v:
         version = json.load(v)
