@@ -25,11 +25,13 @@ SOFTWARE.
 try:
     import fortnitepy
     from fortnitepy.errors import Forbidden
-    import BenBotAsync, asyncio, datetime, json, livejson, aiohttp, logging, sys, random, functions, warnings, requests
+    import BenBotAsync, asyncio, datetime, os, json, livejson, aiohttp, logging, sys, random, functions, warnings, requests, aiofiles
     import time as sleep
     from colorama import init
     init(autoreset=True)
     from colorama import Fore, Back, Style
+    from pathlib import Path
+    from zipfile import ZipFile as zipopen
 except ModuleNotFoundError:
     print(Fore.RED + f'[FORTNITEPY] [N/A] [ERROR] Failed to import 1 or more modules, run "INSTALL PACKAGES.bat".')
     exit()
@@ -37,8 +39,13 @@ with livejson.File("settings.json",pretty=True,sort_keys=True,indent=4) as f:
     data = f
     for value in data.values():
         if value == "":
-            value = 'null'
-GITHUB_BASE = "https://raw.githubusercontent.com/xMistt/fortnitepy-bot/dev/"
+            value = None
+        if value == 'true':
+            value = True
+        if value == 'false':
+            value = False
+GITHUB_BASE = "https://raw.githubusercontent.com/xMistt/fortnitepy-bot/"
+MASTER_ZIP = "https://github.com/xMistt/fortnitepy-bot/archive/"
 time = datetime.datetime.now().strftime('%H:%M:%S')
 print('\033[1m' + f'[FORTNITEPY] [{time}] fortnitepy-bot made by xMistt and Alexa. credit to Terbau for creating the library.')
 class Constants:
@@ -46,6 +53,8 @@ class Constants:
         self.sittingout = False
         self.owner = data["owner"]
         self.isfirstjoin = True
+        self.memberclone = None
+        self.spamint = 1
 constants = Constants()
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 def debugOn():
@@ -91,7 +100,6 @@ except ValueError:
 
 @client.event
 async def event_ready():
-    print("\n")
     print(Fore.GREEN + '[FORTNITEPY] [' + time + '] Client ready as {0.user.display_name}. '.format(client))
     first = "Do"
     output = ""
@@ -103,15 +111,28 @@ async def event_ready():
             else:
                 output += Fore.GREEN + f"{friend.display_name} "
     print(str(output))
-    s = aiohttp.ClientSession()
-    resp = await s.get(GITHUB_BASE + "__version__.json")
-    response = await resp.json()
-    with open("__version__.ver", "r") as v:
-        version = json.load(v)
-    if response["version"] != version["version"]:
-        print("Different version!!")
-    elif response["version"] == version["version"]:
-        print(Fore.GREEN + f"The bot is up to date! Version:{version['version']}")
+    async with aiohttp.ClientSession() as s:
+        resp = await s.get(GITHUB_BASE + "__version__.json")
+        _response = await resp.text()
+        response = json.loads(_response)
+        with open("__version__.json", "r") as v:
+            version = json.load(v)
+        if response["version"] != version["version"]:
+            print(f"[FORTNITEPY] [{time}] The client is outdated! Version:{response['version']} | Current:{version['version']}")
+            async with aiohttp.ClientSession() as session:
+                url = MASTER_ZIP + version["branch"] + ".zip"
+                print(url)
+                TMP = Path(__file__).parent / 'tmp'
+                TMP.mkdir(exist_ok=True)
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        f = await aiofiles.open('tmp/master.zip', mode='wb+')
+                        await f.write(await resp.read())
+                        await f.close()
+                with zipopen('tmp/master.zip', 'r') as f:
+                    f.extractall()
+        elif response["version"] == version["version"]:
+            print(Fore.GREEN + f"[FORTNITEPY] [{time}] The client is up to date! Version:{version['version']}")
 
 
     
@@ -141,15 +162,21 @@ async def event_party_invite(invite):
 
 @client.event
 async def event_friend_request(request):
-    print(f"[FORTNITEPY] [{time}] Recieved friend request from: {request.display_name}.")
-
-    if data['friendaccept'] == True:
+    print(f'[FORTNITEPY] [{time}] Declined friend request.')
+    ownerid = constants.owner
+    member = await client.fetch_profile_by_display_name(ownerid)
+    f = await client.get_friend(member.id)
+    await f.send(f"Would you like to accept {request.display_name}")
+    res = await client.wait_for('friend_message')
+    content = res.content.lower()
+    yes = ('y', 'yes', 'si señor', 'sure', 'si', 'of course' )
+    no = ('no', 'none', 'of course not', 'nope', 'nothing')
+    if content in yes:
         await request.accept()
-        print(f"[FORTNITEPY] [{time}] Accepted friend request from: {request.display_name}.")
-    elif data['friendaccept'] == False:
+        await res.reply(f"Accepted friend request from {request.display_name}")
+    elif content in no:
         await request.decline()
-        print(f"[FORTNITEPY] [{time}] Declined friend request from: {request.display_name}.")
-
+        await res.reply(f"Declined friend request from {request.display_name}")
 @client.event
 async def event_party_member_join(member):
     variants = client.user.party.me.create_variants(**{data['variants-type']: data['variants']})
@@ -385,7 +412,10 @@ async def event_friend_message(message):
 
             await client.user.party.me.set_outfit(asset=VTID[0], variants=variants)
             await message.reply(f'Variants set to {args[0]}.\n(Warning: This feature is not supported, please use !variants)')
-
+        if "!clone" in args[0]:
+            mid = await client.fetch_profile_by_display_name(args[1])
+            if mid != None:
+                constants.memberclone = mid.id
         if "!variants" in args[0]:
             currentskin = await BenBotAsync.getCosmeticFromId(client.user.party.me.outfit)
             currentback = await BenBotAsync.getCosmeticFromId(client.user.party.me.backpack)
@@ -585,14 +615,7 @@ async def event_friend_message(message):
                 await message.reply(f"""Failed to join to {friend.display_name}'s party \n 
                 error code: {e}""")
         if "!crash" in args[0].lower():
-
-            def check(en):
-                return en.id == client.user.id
-            try:
-                await client.wait_for('party_member_promote', check=check, timeout=100)
-            except asyncio.TimeoutError:
-                await data.reply("You took too long to promote me")
-            await client.user.party.me.set_emote('EID_Wave')
+            await asyncio.sleep(2)
             await client.user.party.me.set_outfit('/Game/Athena/Items/Cosmetics/Characters//./')
         if args[0] == "!id":
             user = await client.fetch_profile(content, cache=False, raw=False)
@@ -600,7 +623,36 @@ async def event_friend_message(message):
                 await message.reply(f"{content}'s Epic ID is: {user.id}")
             except AttributeError:
                 await message.reply(f"I couldn't find an Epic account with the name: {content}.")
-
+    else:
+        constants.spamint += 1
+class CosmeticLoadout:
+    """Defines a cosmetic loadout in fortnite"""
+    def __init__(self):
+        self.EID = None
+        self.CID = "CID_029_Athena_Commando_F_Halloween"
+        self.BID = None
+cloadout = CosmeticLoadout()
+@client.event
+async def event_party_member_update(member):
+    if constants.memberclone != None:
+        if constants.memberclone == member.id:
+            
+            clientmember = client.user.party.me
+            cloadout.EID = member.emote
+            cloadout.CID = member.outfit
+            cloadout.BID = member.backpack
+            if clientmember.outfit != cloadout.CID:
+                await asyncio.sleep(0.1)
+                await clientmember.set_outfit(cloadout.CID)
+                print(f"[FORTNITEPY][{time}] Cloned loadout from {member.display_name}")
+            if clientmember.backpack != cloadout.BID:
+                await asyncio.sleep(0.1)
+                await clientmember.set_backpack(cloadout.BID)
+            await asyncio.sleep(0.1)
+            if cloadout.EID is not None:
+                if cloadout.EID != clientmember.emote:
+                    await asyncio.sleep(0.1)
+                    await clientmember.set_emote(cloadout.EID)
 if __name__ == "__main__":
     if data["isconfigured"] == False:
         print(Fore.GREEN + f"[FORTNITEPY] [{time}] Settings are not loaded, please configure them in the json file")
